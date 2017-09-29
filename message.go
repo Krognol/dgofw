@@ -130,25 +130,57 @@ func (m *DiscordMessage) Edit(msg string) {
 	m.s.ChannelMessageEdit(m.ChannelID(), m.ID(), msg)
 }
 
+func (m *DiscordMessage) EditEmbed(embed *discordgo.MessageEmbed) {
+	s := new(string)
+	*s = ""
+	_, err := m.s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Content: s,
+		Embed:   embed,
+		ID:      m.ID(),
+		Channel: m.ChannelID(),
+	})
+
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 func (m *DiscordMessage) Delete() {
 	m.s.ChannelMessageDelete(m.ChannelID(), m.ID())
 }
 
+func (m *DiscordMessage) DeleteManyIDs(ids ...string) {
+	err := m.s.ChannelMessagesBulkDelete(m.ChannelID(), ids)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func (m *DiscordMessage) DeleteMany(msgs ...*DiscordMessage) {
+	result := make([]string, len(msgs))
+	for i, msg := range msgs {
+		result[i] = msg.ID()
+	}
+	m.DeleteManyIDs(result...)
+}
+
 func (m *DiscordMessage) Pairs(keys, vals []string) {
-	for _, key := range keys {
-		m.keys = append(m.keys, strings.Trim(key, "{}"))
+	m.keys = make([]string, len(keys))
+	m.vals = make([]string, len(vals))
+	for i, key := range keys {
+		m.keys[i] = strings.Trim(key, "{}")
 	}
 
 	for i := 0; i < len(keys); i++ {
 		if i == len(keys)-1 {
-			if i < len(vals) {
-				m.vals = append(m.vals, strings.Join(vals[i:], " "))
+			if i <= len(vals)-1 {
+				m.vals[i] = strings.Join(vals[i:], " ")
 			} else {
 				m.vals = append(m.vals, "")
 			}
 		} else {
 			if i <= len(vals)-1 {
-				m.vals = append(m.vals, vals[i])
+				m.vals[i] = vals[i]
 			} else {
 				m.vals = append(m.vals, "")
 			}
@@ -185,7 +217,6 @@ func (m *DiscordMessage) Guild() *DiscordGuild {
 }
 
 // WaitForMessage intercepts messages until ``timeout`` is reached, or ``cb`` returns ``true``.
-// If ``cb`` returns false it will continue to intercept.
-func (m *DiscordMessage) WaitForMessage(timeout int, cb func(*DiscordMessage) bool) {
-	Cache.client.waitForMessage(timeout, cb)
+func (m *DiscordMessage) WaitForMessage(timeout int, cb func(*DiscordMessage) bool, onTimeout func()) {
+	Cache.client.waitForMessage(timeout, cb, onTimeout)
 }

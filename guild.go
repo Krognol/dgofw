@@ -75,12 +75,12 @@ func (g *DiscordGuild) Edit(params discordgo.GuildParams) {
 
 func (g *DiscordGuild) Members() []*DiscordMember {
 	iter := g.g.Members
-	result := make([]*DiscordMember, 0, len(iter))
-	for _, m := range iter {
+	result := make([]*DiscordMember, len(iter))
+	for i, m := range iter {
 		if cm := Cache.GetMember(m.User.ID); cm != nil {
-			result = append(result, cm)
+			result[i] = cm
 		} else {
-			result = append(result, NewDiscordMember(g.Session(), m))
+			result[i] = NewDiscordMember(g.Session(), m)
 		}
 	}
 	return result
@@ -100,7 +100,7 @@ func (g *DiscordGuild) Member(id string) *DiscordMember {
 
 func (g *DiscordGuild) Channels() []*DiscordChannel {
 	iter := g.g.Channels
-	result := make([]*DiscordChannel, 0, len(iter))
+	result := make([]*DiscordChannel, len(iter))
 	for i, c := range iter {
 		if cc := Cache.GetChannel(c.ID); cc != nil {
 			result[i] = cc
