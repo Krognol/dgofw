@@ -9,8 +9,6 @@ import (
 )
 
 type (
-	DiscordEvent int
-
 	DiscordCache struct {
 		sync.RWMutex
 		client   *DiscordClient
@@ -22,19 +20,11 @@ type (
 
 	DiscordClient struct {
 		sync.RWMutex
-		ses          *discordgo.Session
-		handlers     []*Handler
-		interceptors []chan *DiscordMessage
+		ses              *discordgo.Session
+		handlers         []*MsgHandler
+		interceptors     []chan *DiscordMessage
+		VoiceConnections []*DiscordVoiceConnection
 	}
-)
-
-const (
-	_ DiscordEvent = iota
-	evMessage
-	evGuild
-	evChannel
-	evMember
-	evReady
 )
 
 // Cache is a global cache containing several dgofw objects
@@ -48,19 +38,25 @@ func (c *DiscordCache) GetGuild(id string) *DiscordGuild {
 	return nil
 }
 
-func (c *DiscordCache) UpdateGuild(s *discordgo.Session, g *discordgo.Guild) {
+func (c *DiscordCache) UpdateGuild(g *discordgo.Guild) *DiscordGuild {
+	var result *DiscordGuild
 	if gc, ok := c.guilds[g.ID]; ok {
 		gc.g = g
+		result = gc
 	} else {
+		result = NewDiscordGuild(c.client.ses, g)
 		c.Lock()
-		c.guilds[g.ID] = NewDiscordGuild(s, g)
+		c.guilds[g.ID] = result
 		c.Unlock()
 	}
+	return result
 }
 
 func (c *DiscordCache) DeleteGuild(id string) {
 	c.Lock()
-	delete(c.guilds, id)
+	if _, ok := c.guilds[id]; ok {
+		delete(c.guilds, id)
+	}
 	c.Unlock()
 }
 
@@ -72,19 +68,25 @@ func (c *DiscordCache) GetChannel(id string) *DiscordChannel {
 	return nil
 }
 
-func (c *DiscordCache) UpdateChannel(s *discordgo.Session, ch *discordgo.Channel) {
+func (c *DiscordCache) UpdateChannel(ch *discordgo.Channel) *DiscordChannel {
+	var result *DiscordChannel
 	if cc, ok := c.channels[ch.ID]; ok {
 		cc.c = ch
+		result = cc
 	} else {
+		result = NewDiscordChannel(c.client.ses, ch)
 		c.Lock()
-		c.channels[ch.ID] = NewDiscordChannel(s, ch)
+		c.channels[ch.ID] = result
 		c.Unlock()
 	}
+	return result
 }
 
 func (c *DiscordCache) DeleteChannel(id string) {
 	c.Lock()
-	delete(c.channels, id)
+	if _, ok := c.channels[id]; ok {
+		delete(c.channels, id)
+	}
 	c.Unlock()
 }
 
@@ -96,19 +98,25 @@ func (c *DiscordCache) GetMember(id string) *DiscordMember {
 	return nil
 }
 
-func (c *DiscordCache) UpdateMember(s *discordgo.Session, m *discordgo.Member) {
+func (c *DiscordCache) UpdateMember(m *discordgo.Member) *DiscordMember {
+	var result *DiscordMember
 	if cm, ok := c.members[m.User.ID]; ok {
 		cm.m = m
+		result = cm
 	} else {
+		result = NewDiscordMember(c.client.ses, m)
 		c.Lock()
-		c.members[m.User.ID] = NewDiscordMember(s, m)
+		c.members[m.User.ID] = result
 		c.Unlock()
 	}
+	return result
 }
 
 func (c *DiscordCache) DeleteMember(id string) {
 	c.Lock()
-	delete(c.members, id)
+	if _, ok := c.members[id]; ok {
+		delete(c.members, id)
+	}
 	c.Unlock()
 }
 
@@ -124,18 +132,11 @@ func (c *DiscordClient) initEvents() {
 	// Message Event Handlers
 	c.ses.AddHandler(c.handleMessageC)
 	c.ses.AddHandler(c.handleMessageE)
-	//c.ses.AddHandler(c.handleMessageD)
 
 	// Guild Event Handlers
 
 	// We ignore GUILD_CREATE
-	c.ses.AddHandler(c.handleGuildE)
 	c.ses.AddHandler(c.handleGuildD)
-	c.ses.AddHandler(c.handleReady)
-
-	c.ses.AddHandler(c.handleMemberA)
-	c.ses.AddHandler(c.handleMemberE)
-	c.ses.AddHandler(c.handleMemberD)
 }
 
 func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit func()) (reader chan *DiscordMessage) {
@@ -154,6 +155,7 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 				if onLimit != nil {
 					onLimit()
 				}
+				close(closer)
 			case <-closer:
 				stop = true
 				close(closer)
@@ -172,9 +174,35 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 	return
 }
 
+func (c *DiscordClient) interceptForever(closer chan bool) (reader chan *DiscordMessage) {
+	reader = make(chan *DiscordMessage)
+	c.interceptors = append(c.interceptors, reader)
+
+	go func() {
+		index := len(c.interceptors) - 1
+		stop := false
+		for !stop {
+			select {
+			case <-closer:
+				stop = true
+				close(closer)
+			}
+		}
+
+		c.Lock()
+		if index > 0 {
+			c.interceptors = append(c.interceptors[:index], c.interceptors[index+1:]...)
+		} else {
+			c.interceptors = c.interceptors[1:]
+		}
+		c.Unlock()
+	}()
+	return
+}
+
 func (c *DiscordClient) waitForMessage(timeout int, cb func(*DiscordMessage) bool, onLimit func()) {
 	closer := make(chan struct{})
-	reader := c.intercept(15, closer, onLimit)
+	reader := c.intercept(timeout, closer, onLimit)
 
 	for msg := range reader {
 		if cb(msg) {
@@ -182,6 +210,24 @@ func (c *DiscordClient) waitForMessage(timeout int, cb func(*DiscordMessage) boo
 			return
 		}
 	}
+}
+
+func (c *DiscordClient) waitForever(cb func(*DiscordMessage)) chan bool {
+	closer := make(chan bool)
+	reader := c.interceptForever(closer)
+	go func(cb func(*DiscordMessage), closer chan bool) {
+		for {
+			select {
+			case msg := <-reader:
+				cb(msg)
+			case t := <-closer:
+				if t {
+					return
+				}
+			}
+		}
+	}(cb, closer)
+	return closer
 }
 
 // NewDiscordClient makes a new DiscordClient
@@ -216,4 +262,8 @@ func (c *DiscordClient) Disconnect() {
 // SetStatus sets the ``Playing ...`` status for the bot.
 func (c *DiscordClient) SetStatus(status string) {
 	c.ses.UpdateStatus(0, status)
+}
+
+func (c *DiscordClient) Send(channel, msg string) {
+	c.ses.ChannelMessageSend(channel, msg)
 }

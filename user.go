@@ -1,6 +1,7 @@
 package dgofw
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -52,4 +53,18 @@ func (u *DiscordUser) Bot() bool {
 
 func (u *DiscordUser) Verified() bool {
 	return u.u.Verified
+}
+
+func (u *DiscordUser) AsMember(guild string) *DiscordMember {
+	if mem := Cache.GetMember(u.ID()); mem != nil {
+		return mem
+	}
+
+	m, err := u.s.GuildMember(guild, u.ID())
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	return NewDiscordMember(u.s, m)
 }

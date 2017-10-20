@@ -11,7 +11,6 @@ type DiscordGuild struct {
 	s      *discordgo.Session
 	g      *discordgo.Guild
 	Colors map[string]int
-	Emojis []*discordgo.Emoji
 	Owner  *DiscordMember
 }
 
@@ -20,7 +19,7 @@ func NewDiscordGuild(s *discordgo.Session, g *discordgo.Guild) *DiscordGuild {
 		s:      s,
 		g:      g,
 		Colors: make(map[string]int),
-		Emojis: g.Emojis,
+		Owner:  nil,
 	}
 	if owner := Cache.GetMember(g.OwnerID); owner != nil {
 		result.Owner = owner
@@ -33,6 +32,14 @@ func NewDiscordGuild(s *discordgo.Session, g *discordgo.Guild) *DiscordGuild {
 
 func (g *DiscordGuild) ID() string {
 	return g.g.ID
+}
+
+func (g *DiscordGuild) VoiceStates() []*discordgo.VoiceState {
+	return g.g.VoiceStates
+}
+
+func (g *DiscordGuild) Emojis() []*discordgo.Emoji {
+	return g.g.Emojis
 }
 
 func (g *DiscordGuild) Icon() string {

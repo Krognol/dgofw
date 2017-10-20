@@ -11,20 +11,20 @@ import (
 
 type DiscordMessage struct {
 	sync.RWMutex
-	keys   []string
-	vals   []string
-	msg    *discordgo.Message
-	s      *discordgo.Session
-	Author *DiscordUser
-	IsMod  bool
+	keys     []string
+	vals     []string
+	m        *discordgo.Message
+	s        *discordgo.Session
+	Author   *DiscordUser
+	Mentions []*DiscordUser
 }
 
 func (m *DiscordMessage) ID() string {
-	return m.msg.ID
+	return m.m.ID
 }
 
 func (m *DiscordMessage) ChannelID() string {
-	return m.msg.ChannelID
+	return m.m.ChannelID
 }
 
 func (m *DiscordMessage) GuildID() string {
@@ -32,12 +32,12 @@ func (m *DiscordMessage) GuildID() string {
 }
 
 func (m *DiscordMessage) Timestamp() string {
-	result, _ := m.msg.Timestamp.Parse()
+	result, _ := m.m.Timestamp.Parse()
 	return result.String()
 }
 
 func (m *DiscordMessage) Content() string {
-	return m.msg.Content
+	return m.m.Content
 }
 
 func (m *DiscordMessage) Session() *discordgo.Session {
@@ -46,19 +46,30 @@ func (m *DiscordMessage) Session() *discordgo.Session {
 
 func NewDiscordMessage(s *discordgo.Session, m *discordgo.Message) *DiscordMessage {
 	result := &DiscordMessage{
-		keys:   make([]string, 0),
-		vals:   make([]string, 0),
-		msg:    m,
-		s:      s,
-		Author: NewDiscordUser(s, m.Author),
+		keys:     make([]string, 0),
+		vals:     make([]string, 0),
+		m:        m,
+		s:        s,
+		Author:   NewDiscordUser(s, m.Author),
+		Mentions: make([]*DiscordUser, 0),
 	}
-	perms, _ := s.State.UserChannelPermissions(m.Author.ID, m.ChannelID)
 
-	result.IsMod = ((perms & discordgo.PermissionAll) == discordgo.PermissionAll) ||
+	if len(m.Mentions) > 0 {
+		result.Mentions = make([]*DiscordUser, len(m.Mentions))
+		for i, u := range m.Mentions {
+			result.Mentions[i] = NewDiscordUser(s, u)
+		}
+	}
+	return result
+}
+
+func (m *DiscordMessage) IsMod() bool {
+	perms, _ := m.s.State.UserChannelPermissions(m.Author.ID(), m.ChannelID())
+
+	return ((perms & discordgo.PermissionAll) == discordgo.PermissionAll) ||
 		((perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator) ||
 		((perms & discordgo.PermissionManageServer) == discordgo.PermissionManageServer) ||
 		((perms & discordgo.PermissionAllChannel) == discordgo.PermissionAllChannel)
-	return result
 }
 
 func (m *DiscordMessage) AddKey(key string) {
@@ -219,4 +230,24 @@ func (m *DiscordMessage) Guild() *DiscordGuild {
 // WaitForMessage intercepts messages until ``timeout`` is reached, or ``cb`` returns ``true``.
 func (m *DiscordMessage) WaitForMessage(timeout int, cb func(*DiscordMessage) bool, onTimeout func()) {
 	Cache.client.waitForMessage(timeout, cb, onTimeout)
+}
+
+func (m *DiscordMessage) WaitForever(cb func(*DiscordMessage)) (done chan bool) {
+	return Cache.client.waitForever(cb)
+}
+
+func (m *DiscordMessage) React(emoji string) {
+	m.s.MessageReactionAdd(m.ChannelID(), m.ID(), emoji)
+}
+
+func (m *DiscordMessage) RemoveReaction(emoji string) {
+	m.s.MessageReactionRemove(m.ChannelID(), m.ID(), emoji, m.Author.ID())
+}
+
+func (m *DiscordMessage) HasMention() bool {
+	return len(m.m.Mentions) > 0
+}
+
+func (m *DiscordMessage) MentionsEveryone() bool {
+	return m.m.MentionEveryone
 }
