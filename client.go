@@ -141,7 +141,10 @@ func (c *DiscordClient) initEvents() {
 
 func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit func()) (reader chan *DiscordMessage) {
 	reader = make(chan *DiscordMessage)
+
+	c.Lock()
 	c.interceptors = append(c.interceptors, reader)
+	c.Unlock()
 
 	go func() {
 		ticker := time.NewTicker(time.Duration(timeout) * time.Second)
@@ -176,7 +179,10 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 
 func (c *DiscordClient) interceptForever(closer chan bool) (reader chan *DiscordMessage) {
 	reader = make(chan *DiscordMessage)
+
+	c.Lock()
 	c.interceptors = append(c.interceptors, reader)
+	c.Unlock()
 
 	go func() {
 		index := len(c.interceptors) - 1
