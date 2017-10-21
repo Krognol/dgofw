@@ -72,18 +72,6 @@ func (m *DiscordMessage) IsMod() bool {
 		((perms & discordgo.PermissionAllChannel) == discordgo.PermissionAllChannel)
 }
 
-func (m *DiscordMessage) AddKey(key string) {
-	m.RLock()
-	m.keys = append(m.keys, key)
-	m.RUnlock()
-}
-
-func (m *DiscordMessage) AddVal(val string) {
-	m.RLock()
-	m.vals = append(m.vals, val)
-	m.RUnlock()
-}
-
 func (m *DiscordMessage) Reply(msg string) *DiscordMessage {
 	m2, err := m.s.ChannelMessageSend(m.ChannelID(), msg)
 	if err != nil {
