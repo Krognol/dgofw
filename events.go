@@ -77,6 +77,21 @@ func (c *DiscordClient) OnMessage(pattern string, once bool, cb func(*DiscordMes
 	})
 }
 
+// OnMessageDeleted handles a ``MESSAGE_DELETE`` event
+//
+// ``MESSAGE_DELETE`` is a special case, since only 2 fields are present.
+func (c *DiscordClient) OnMessageDeleted(once bool, cb func(*discordgo.MessageDelete)) {
+	mdcb := func(_ *discordgo.Session, m *discordgo.MessageDelete) {
+		cb(m)
+	}
+
+	if once {
+		c.ses.AddHandlerOnce(mdcb)
+	} else {
+		c.ses.AddHandler(mdcb)
+	}
+}
+
 // OnReady handles a Discord ``READY`` event
 func (c *DiscordClient) OnReady(once bool, cb func(*discordgo.Ready)) {
 	readyCb := func(_ *discordgo.Session, r *discordgo.Ready) {
