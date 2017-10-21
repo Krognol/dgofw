@@ -35,7 +35,17 @@ func (c *DiscordCache) GetGuild(id string) *DiscordGuild {
 	if g, ok := c.guilds[id]; ok {
 		return g
 	}
-	return nil
+
+	if g, err := c.client.ses.State.Guild(id); err == nil {
+		return NewDiscordGuild(c.client.ses, g)
+	}
+
+	g, err := c.client.ses.Guild(id)
+	if err != nil {
+		return nil
+	}
+
+	return NewDiscordGuild(c.client.ses, g)
 }
 
 func (c *DiscordCache) UpdateGuild(g *discordgo.Guild) *DiscordGuild {
@@ -62,10 +72,20 @@ func (c *DiscordCache) DeleteGuild(id string) {
 
 // GetChannel gets a channel from the cache
 func (c *DiscordCache) GetChannel(id string) *DiscordChannel {
-	if c, ok := c.channels[id]; ok {
-		return c
+	if ch, ok := c.channels[id]; ok {
+		return ch
 	}
-	return nil
+
+	if ch, err := c.client.ses.State.Channel(id); err == nil {
+		return NewDiscordChannel(c.client.ses, ch)
+	}
+
+	ch, err := c.client.ses.Channel(id)
+	if err != nil {
+		return nil
+	}
+
+	return NewDiscordChannel(c.client.ses, ch)
 }
 
 func (c *DiscordCache) UpdateChannel(ch *discordgo.Channel) *DiscordChannel {
@@ -91,11 +111,21 @@ func (c *DiscordCache) DeleteChannel(id string) {
 }
 
 // GetMember gets a member from the cache
-func (c *DiscordCache) GetMember(id string) *DiscordMember {
+func (c *DiscordCache) GetMember(guild, id string) *DiscordMember {
 	if m, ok := c.members[id]; ok {
 		return m
 	}
-	return nil
+
+	if m, err := c.client.ses.State.Member(guild, id); err == nil {
+		return NewDiscordMember(c.client.ses, m)
+	}
+
+	m, err := c.client.ses.GuildMember(guild, id)
+	if err != nil {
+		return nil
+	}
+
+	return NewDiscordMember(c.client.ses, m)
 }
 
 func (c *DiscordCache) UpdateMember(m *discordgo.Member) *DiscordMember {
