@@ -43,9 +43,9 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 		}
 
 		vals := strings.Fields(m.Content)
+		keys := strings.Fields(handler.pattern)
 		if len(vals) > 0 || len(m.Content) >= len(handler.pattern) {
-			if m.Content == handler.pattern || strings.HasPrefix(handler.pattern, m.Content[0:len(vals[0])]) {
-				keys := strings.Fields(handler.pattern)
+			if m.Content == handler.pattern || strings.HasPrefix(m.Content[0:len(vals[0])], keys[0]) {
 
 				if len(keys) > 0 || len(vals) > 0 {
 					msg.Pairs(keys, vals)
@@ -177,7 +177,7 @@ func (c *DiscordClient) OnMemberAdd(once bool, cb func(*DiscordMember)) {
 
 func (c *DiscordClient) OnMemberRemove(once bool, cb func(*DiscordMember)) {
 	handlerCb := func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
-		mem := Cache.GetMember(m.User.ID)
+		mem := Cache.GetMember(m.GuildID, m.User.ID)
 		Cache.DeleteMember(m.User.ID)
 		cb(mem)
 	}
