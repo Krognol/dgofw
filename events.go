@@ -45,7 +45,8 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 		vals := strings.Fields(m.Content)
 		keys := strings.Fields(handler.pattern)
 		if len(vals) > 0 || len(m.Content) >= len(handler.pattern) {
-			if m.Content == handler.pattern || strings.HasPrefix(m.Content[0:len(vals[0])], keys[0]) {
+			if strings.ToLower(m.Content) == strings.ToLower(handler.pattern) ||
+				strings.HasPrefix(strings.ToLower(vals[0]), strings.ToLower(keys[0])) {
 
 				if len(keys) > 0 || len(vals) > 0 {
 					msg.Pairs(keys, vals)
@@ -61,9 +62,6 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 }
 
 func (c *DiscordClient) handleMessageE(s *discordgo.Session, m *discordgo.MessageUpdate) {
-	if m.Author == nil {
-		return
-	}
 	c.handleMessageC(s, (*discordgo.MessageCreate)(m))
 }
 
