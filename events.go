@@ -62,7 +62,9 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 }
 
 func (c *DiscordClient) handleMessageE(s *discordgo.Session, m *discordgo.MessageUpdate) {
-	c.handleMessageC(s, (*discordgo.MessageCreate)(m))
+	if m.Author != nil {
+		c.handleMessageC(s, (*discordgo.MessageCreate)(m))
+	}
 }
 
 // OnMessage handles a ``MESSAGE_*`` event.
