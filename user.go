@@ -56,7 +56,7 @@ func (u *DiscordUser) Verified() bool {
 }
 
 func (u *DiscordUser) AsMember(guild string) *DiscordMember {
-	if mem := Cache.GetMember(u.ID()); mem != nil {
+	if mem := Cache.GetMember(guild, u.ID()); mem != nil {
 		return mem
 	}
 

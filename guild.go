@@ -21,7 +21,7 @@ func NewDiscordGuild(s *discordgo.Session, g *discordgo.Guild) *DiscordGuild {
 		Colors: make(map[string]int),
 		Owner:  nil,
 	}
-	if owner := Cache.GetMember(g.OwnerID); owner != nil {
+	if owner := Cache.GetMember(g.ID, g.OwnerID); owner != nil {
 		result.Owner = owner
 	} else {
 		m, _ := s.GuildMember(g.ID, g.OwnerID)
@@ -84,7 +84,7 @@ func (g *DiscordGuild) Members() []*DiscordMember {
 	iter := g.g.Members
 	result := make([]*DiscordMember, len(iter))
 	for i, m := range iter {
-		if cm := Cache.GetMember(m.User.ID); cm != nil {
+		if cm := Cache.GetMember(g.ID(), m.User.ID); cm != nil {
 			result[i] = cm
 		} else {
 			result[i] = NewDiscordMember(g.Session(), m)
@@ -94,7 +94,7 @@ func (g *DiscordGuild) Members() []*DiscordMember {
 }
 
 func (g *DiscordGuild) Member(id string) *DiscordMember {
-	if mem := Cache.GetMember(id); mem != nil {
+	if mem := Cache.GetMember(g.ID(), id); mem != nil {
 		return mem
 	}
 	for _, mem := range g.g.Members {
