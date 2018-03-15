@@ -9,14 +9,14 @@ import (
 )
 
 type DiscordUser struct {
-	s *discordgo.Session
-	u *discordgo.User
+	client *DiscordClient
+	u      *discordgo.User
 }
 
-func NewDiscordUser(s *discordgo.Session, u *discordgo.User) *DiscordUser {
+func NewDiscordUser(client *DiscordClient, u *discordgo.User) *DiscordUser {
 	return &DiscordUser{
-		s: s,
-		u: u,
+		client: client,
+		u:      u,
 	}
 }
 
@@ -44,7 +44,7 @@ func (u *DiscordUser) Timestamp() string {
 	id, _ := strconv.ParseInt(u.ID(), 10, 64)
 	ms := (id >> 22) + 1420070400000
 	t := time.Unix(ms/1000, 0)
-	return t.Format("2006-01-02 15:04:05")
+	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
 func (u *DiscordUser) Bot() bool {
@@ -56,15 +56,24 @@ func (u *DiscordUser) Verified() bool {
 }
 
 func (u *DiscordUser) AsMember(guild string) *DiscordMember {
-	if mem := Cache.GetMember(guild, u.ID()); mem != nil {
+	if mem := u.client.Cache.GetMember(guild, u.ID()); mem != nil {
 		return mem
 	}
 
-	m, err := u.s.GuildMember(guild, u.ID())
+	m, err := u.client.ses.GuildMember(guild, u.ID())
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
 
-	return NewDiscordMember(u.s, m)
+	return NewDiscordMember(u.client, m)
+}
+
+func (u *DiscordUser) CreateDMChannel() *DiscordChannel {
+	c, err := u.client.ses.UserChannelCreate(u.ID())
+	if err != nil {
+		return nil
+	}
+
+	return NewDiscordChannel(u.client, c)
 }

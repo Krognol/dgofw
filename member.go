@@ -8,32 +8,32 @@ import (
 )
 
 type DiscordMember struct {
-	s     *discordgo.Session
-	m     *discordgo.Member
-	User  *DiscordUser
-	Roles []*discordgo.Role
+	client *DiscordClient
+	m      *discordgo.Member
+	User   *DiscordUser
+	Roles  []*discordgo.Role
 }
 
-func NewDiscordMember(s *discordgo.Session, m *discordgo.Member) *DiscordMember {
+func NewDiscordMember(client *DiscordClient, m *discordgo.Member) *DiscordMember {
 	result := &DiscordMember{
-		s:     s,
-		m:     m,
-		Roles: make([]*discordgo.Role, 0),
+		client: client,
+		m:      m,
+		Roles:  make([]*discordgo.Role, 0),
 	}
 
-	result.User = NewDiscordUser(s, m.User)
+	result.User = NewDiscordUser(client, m.User)
 	return result
 }
 
 func (m *DiscordMember) Guild() *DiscordGuild {
-	if res := Cache.GetGuild(m.m.GuildID); res != nil {
+	if res := m.client.Cache.GetGuild(m.m.GuildID); res != nil {
 		return res
 	}
-	g, err := Cache.client.ses.Guild(m.m.GuildID)
+	g, err := m.client.Cache.client.ses.Guild(m.m.GuildID)
 	if err != nil {
 		return nil
 	}
-	return NewDiscordGuild(m.s, g)
+	return NewDiscordGuild(m.client, g)
 }
 
 func (m *DiscordMember) GuildID() string {
@@ -50,7 +50,7 @@ func (m *DiscordMember) JoinedAt() string {
 		fmt.Println(err)
 		return "<nil>"
 	}
-	return t.Format("2006-01-02 15:04:05")
+	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
 func (m *DiscordMember) Color() int {
@@ -60,11 +60,11 @@ func (m *DiscordMember) Color() int {
 			return c
 		}
 	}
-	c := m.s.State.UserColor(m.User.ID(), g.Channels()[0].ID())
+	c := m.client.ses.State.UserColor(m.User.ID(), g.Channels()[0].ID())
 	g.Colors[m.User.ID()] = c
 	return c
 }
 
 func (m *DiscordMember) Ban(days int) error {
-	return m.s.GuildBanCreate(m.GuildID(), m.User.ID(), days)
+	return m.client.ses.GuildBanCreate(m.GuildID(), m.User.ID(), days)
 }

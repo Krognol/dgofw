@@ -34,15 +34,15 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
-	for i, handler := range c.handlers {
-		msg := NewDiscordMessage(s, m.Message)
-		if len(c.interceptors) > 0 {
-			for _, iter := range c.interceptors {
-				iter <- msg
-			}
+	msg := NewDiscordMessage(c, m.Message)
+	vals := strings.Fields(m.Content)
+	if len(c.interceptors) > 0 {
+		for _, iter := range c.interceptors {
+			iter <- msg
 		}
+	}
 
-		vals := strings.Fields(m.Content)
+	for i, handler := range c.handlers {
 		keys := strings.Fields(handler.pattern)
 		if len(vals) > 0 || len(m.Content) >= len(handler.pattern) {
 			if strings.ToLower(m.Content) == strings.ToLower(handler.pattern) ||
@@ -107,7 +107,7 @@ func (c *DiscordClient) OnReady(once bool, cb func(*discordgo.Ready)) {
 
 func (c *DiscordClient) OnGuildUpdate(once bool, cb func(*DiscordGuild)) {
 	handleCb := func(_ *discordgo.Session, edit *discordgo.GuildUpdate) {
-		res := Cache.UpdateGuild(edit.Guild)
+		res := c.Cache.UpdateGuild(edit.Guild)
 		cb(res)
 	}
 
@@ -119,12 +119,12 @@ func (c *DiscordClient) OnGuildUpdate(once bool, cb func(*DiscordGuild)) {
 }
 
 func (c *DiscordClient) handleGuildD(s *discordgo.Session, g *discordgo.GuildDelete) {
-	Cache.DeleteGuild(g.ID)
+	c.Cache.DeleteGuild(g.ID)
 }
 
 func (c *DiscordClient) OnChannelCreate(once bool, cb func(*DiscordChannel)) {
-	hndlerCb := func(_ *discordgo.Session, c *discordgo.ChannelCreate) {
-		ch := Cache.UpdateChannel(c.Channel)
+	hndlerCb := func(_ *discordgo.Session, cc *discordgo.ChannelCreate) {
+		ch := c.Cache.UpdateChannel(cc.Channel)
 		cb(ch)
 	}
 
@@ -136,8 +136,8 @@ func (c *DiscordClient) OnChannelCreate(once bool, cb func(*DiscordChannel)) {
 }
 
 func (c *DiscordClient) OnChannelUpdate(once bool, cb func(*DiscordChannel)) {
-	handlerCb := func(_ *discordgo.Session, c *discordgo.ChannelUpdate) {
-		ch := Cache.UpdateChannel(c.Channel)
+	handlerCb := func(_ *discordgo.Session, cu *discordgo.ChannelUpdate) {
+		ch := c.Cache.UpdateChannel(cu.Channel)
 		cb(ch)
 	}
 
@@ -149,9 +149,9 @@ func (c *DiscordClient) OnChannelUpdate(once bool, cb func(*DiscordChannel)) {
 }
 
 func (c *DiscordClient) OnChannelDelete(once bool, cb func(*DiscordChannel)) {
-	handlerCb := func(_ *discordgo.Session, c *discordgo.ChannelDelete) {
-		ch := Cache.GetChannel(c.ID)
-		Cache.DeleteChannel(c.ID)
+	handlerCb := func(_ *discordgo.Session, cd *discordgo.ChannelDelete) {
+		ch := c.Cache.GetChannel(cd.ID)
+		c.Cache.DeleteChannel(cd.ID)
 		cb(ch)
 	}
 
@@ -164,7 +164,7 @@ func (c *DiscordClient) OnChannelDelete(once bool, cb func(*DiscordChannel)) {
 
 func (c *DiscordClient) OnMemberAdd(once bool, cb func(*DiscordMember)) {
 	handlerCb := func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
-		mem := Cache.UpdateMember(m.Member)
+		mem := c.Cache.UpdateMember(m.Member)
 		cb(mem)
 	}
 
@@ -177,8 +177,8 @@ func (c *DiscordClient) OnMemberAdd(once bool, cb func(*DiscordMember)) {
 
 func (c *DiscordClient) OnMemberRemove(once bool, cb func(*DiscordMember)) {
 	handlerCb := func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
-		mem := Cache.GetMember(m.GuildID, m.User.ID)
-		Cache.DeleteMember(m.User.ID)
+		mem := c.Cache.GetMember(m.GuildID, m.User.ID)
+		c.Cache.DeleteMember(m.User.ID)
 		cb(mem)
 	}
 
@@ -191,7 +191,7 @@ func (c *DiscordClient) OnMemberRemove(once bool, cb func(*DiscordMember)) {
 
 func (c *DiscordClient) OnMemberUpdate(once bool, cb func(*DiscordMember)) {
 	handlerCb := func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-		mem := Cache.UpdateMember(m.Member)
+		mem := c.Cache.UpdateMember(m.Member)
 		cb(mem)
 	}
 
@@ -217,13 +217,13 @@ func (c *DiscordClient) WithMemberChunk(once bool, cb func(*discordgo.GuildMembe
 func (c *DiscordClient) WithGuildBanAdd(once bool, cb func(*DiscordGuildBan)) {
 	guildBanAddCb := func(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 		result := &DiscordGuildBan{
-			User: NewDiscordUser(s, ban.User),
+			User: NewDiscordUser(c, ban.User),
 		}
-		if cg := Cache.GetGuild(ban.GuildID); cg != nil {
+		if cg := c.Cache.GetGuild(ban.GuildID); cg != nil {
 			result.Guild = cg
 		} else {
 			g, _ := s.Guild(ban.GuildID)
-			result.Guild = NewDiscordGuild(s, g)
+			result.Guild = NewDiscordGuild(c, g)
 		}
 		cb(result)
 	}
@@ -238,13 +238,13 @@ func (c *DiscordClient) WithGuildBanAdd(once bool, cb func(*DiscordGuildBan)) {
 func (c *DiscordClient) WithGuildBanRemove(once bool, cb func(*DiscordGuildBan)) {
 	guildBanRemoveCb := func(s *discordgo.Session, ban *discordgo.GuildBanRemove) {
 		result := &DiscordGuildBan{
-			User: NewDiscordUser(s, ban.User),
+			User: NewDiscordUser(c, ban.User),
 		}
-		if cg := Cache.GetGuild(ban.GuildID); cg != nil {
+		if cg := c.Cache.GetGuild(ban.GuildID); cg != nil {
 			result.Guild = cg
 		} else {
 			g, _ := s.Guild(ban.GuildID)
-			result.Guild = NewDiscordGuild(s, g)
+			result.Guild = NewDiscordGuild(c, g)
 		}
 		cb(result)
 	}
@@ -253,5 +253,17 @@ func (c *DiscordClient) WithGuildBanRemove(once bool, cb func(*DiscordGuildBan))
 		c.ses.AddHandlerOnce(guildBanRemoveCb)
 	} else {
 		c.ses.AddHandler(guildBanRemoveCb)
+	}
+}
+
+func (c *DiscordClient) OnMessageReactionAdd(once bool, cb func(*discordgo.MessageReactionAdd)) {
+	react := func(_ *discordgo.Session, r *discordgo.MessageReactionAdd) {
+		cb(r)
+	}
+
+	if once {
+		c.ses.AddHandlerOnce(react)
+	} else {
+		c.ses.AddHandler(react)
 	}
 }

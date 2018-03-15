@@ -8,24 +8,24 @@ import (
 )
 
 type DiscordGuild struct {
-	s      *discordgo.Session
+	client *DiscordClient
 	g      *discordgo.Guild
 	Colors map[string]int
 	Owner  *DiscordMember
 }
 
-func NewDiscordGuild(s *discordgo.Session, g *discordgo.Guild) *DiscordGuild {
+func NewDiscordGuild(client *DiscordClient, g *discordgo.Guild) *DiscordGuild {
 	result := &DiscordGuild{
-		s:      s,
+		client: client,
 		g:      g,
 		Colors: make(map[string]int),
 		Owner:  nil,
 	}
-	if owner := Cache.GetMember(g.ID, g.OwnerID); owner != nil {
+	if owner := client.Cache.GetMember(g.ID, g.OwnerID); owner != nil {
 		result.Owner = owner
 	} else {
-		m, _ := s.GuildMember(g.ID, g.OwnerID)
-		result.Owner = NewDiscordMember(s, m)
+		m, _ := client.ses.GuildMember(g.ID, g.OwnerID)
+		result.Owner = NewDiscordMember(client, m)
 	}
 	return result
 }
@@ -54,8 +54,8 @@ func (g *DiscordGuild) Roles() []*discordgo.Role {
 	return g.g.Roles
 }
 
-func (g *DiscordGuild) Session() *discordgo.Session {
-	return g.s
+func (g *DiscordGuild) Client() *DiscordClient {
+	return g.client
 }
 
 func (g *DiscordGuild) MemberCount() int {
@@ -73,33 +73,33 @@ func (g *DiscordGuild) Region() string {
 func (g *DiscordGuild) CreatedAt() string {
 	id, _ := strconv.ParseInt(g.ID(), 10, 64)
 	ms := (id >> 22) + 1420070400000
-	return time.Unix(ms/1000, 0).Format("2006-01-02 15:04:05")
+	return time.Unix(ms/1000, 0).UTC().Format("2006-01-02 15:04:05")
 }
 
 func (g *DiscordGuild) Edit(params discordgo.GuildParams) {
-	g.s.GuildEdit(g.ID(), params)
+	g.client.ses.GuildEdit(g.ID(), params)
 }
 
 func (g *DiscordGuild) Members() []*DiscordMember {
 	iter := g.g.Members
 	result := make([]*DiscordMember, len(iter))
 	for i, m := range iter {
-		if cm := Cache.GetMember(g.ID(), m.User.ID); cm != nil {
+		if cm := g.client.Cache.GetMember(g.ID(), m.User.ID); cm != nil {
 			result[i] = cm
 		} else {
-			result[i] = NewDiscordMember(g.Session(), m)
+			result[i] = NewDiscordMember(g.client, m)
 		}
 	}
 	return result
 }
 
 func (g *DiscordGuild) Member(id string) *DiscordMember {
-	if mem := Cache.GetMember(g.ID(), id); mem != nil {
+	if mem := g.client.Cache.GetMember(g.ID(), id); mem != nil {
 		return mem
 	}
 	for _, mem := range g.g.Members {
 		if mem.User.ID == id {
-			return NewDiscordMember(g.s, mem)
+			return NewDiscordMember(g.client, mem)
 		}
 	}
 	return nil
@@ -109,10 +109,10 @@ func (g *DiscordGuild) Channels() []*DiscordChannel {
 	iter := g.g.Channels
 	result := make([]*DiscordChannel, len(iter))
 	for i, c := range iter {
-		if cc := Cache.GetChannel(c.ID); cc != nil {
+		if cc := g.client.Cache.GetChannel(c.ID); cc != nil {
 			result[i] = cc
 		} else {
-			result[i] = NewDiscordChannel(g.Session(), c)
+			result[i] = NewDiscordChannel(g.client, c)
 		}
 	}
 	return result

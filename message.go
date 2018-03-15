@@ -14,7 +14,7 @@ type DiscordMessage struct {
 	keys     []string
 	vals     []string
 	m        *discordgo.Message
-	s        *discordgo.Session
+	client   *DiscordClient
 	Author   *DiscordUser
 	Mentions []*DiscordUser
 }
@@ -40,31 +40,31 @@ func (m *DiscordMessage) Content() string {
 	return m.m.Content
 }
 
-func (m *DiscordMessage) Session() *discordgo.Session {
-	return m.s
+func (m *DiscordMessage) Client() *DiscordClient {
+	return m.client
 }
 
-func NewDiscordMessage(s *discordgo.Session, m *discordgo.Message) *DiscordMessage {
+func NewDiscordMessage(client *DiscordClient, m *discordgo.Message) *DiscordMessage {
 	result := &DiscordMessage{
 		keys:     make([]string, 0),
 		vals:     make([]string, 0),
 		m:        m,
-		s:        s,
-		Author:   NewDiscordUser(s, m.Author),
+		client:   client,
+		Author:   NewDiscordUser(client, m.Author),
 		Mentions: make([]*DiscordUser, 0),
 	}
 
 	if len(m.Mentions) > 0 {
 		result.Mentions = make([]*DiscordUser, len(m.Mentions))
 		for i, u := range m.Mentions {
-			result.Mentions[i] = NewDiscordUser(s, u)
+			result.Mentions[i] = NewDiscordUser(client, u)
 		}
 	}
 	return result
 }
 
 func (m *DiscordMessage) IsMod() bool {
-	perms, _ := m.s.State.UserChannelPermissions(m.Author.ID(), m.ChannelID())
+	perms, _ := m.client.ses.State.UserChannelPermissions(m.Author.ID(), m.ChannelID())
 
 	return ((perms & discordgo.PermissionAll) == discordgo.PermissionAll) ||
 		((perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator) ||
@@ -73,47 +73,47 @@ func (m *DiscordMessage) IsMod() bool {
 }
 
 func (m *DiscordMessage) Reply(msg string) *DiscordMessage {
-	m2, err := m.s.ChannelMessageSend(m.ChannelID(), msg)
+	m2, err := m.client.ses.ChannelMessageSend(m.ChannelID(), msg)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	return NewDiscordMessage(m.s, m2)
+	return NewDiscordMessage(m.client, m2)
 }
 
 func (m *DiscordMessage) ReplyComplex(m2 *discordgo.MessageSend) *DiscordMessage {
-	m3, err := m.s.ChannelMessageSendComplex(m.ChannelID(), m2)
+	m3, err := m.client.ses.ChannelMessageSendComplex(m.ChannelID(), m2)
 	if err != nil {
 		return nil
 	}
-	return NewDiscordMessage(m.s, m3)
+	return NewDiscordMessage(m.client, m3)
 }
 
 func (m *DiscordMessage) ReplyEmbed(embed *discordgo.MessageEmbed) *DiscordMessage {
-	m2, err := m.s.ChannelMessageSendEmbed(m.ChannelID(), embed)
+	m2, err := m.client.ses.ChannelMessageSendEmbed(m.ChannelID(), embed)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	return NewDiscordMessage(m.s, m2)
+	return NewDiscordMessage(m.client, m2)
 }
 
 func (m *DiscordMessage) ReplyFile(name string, file io.Reader) *DiscordMessage {
-	m2, err := m.s.ChannelFileSend(m.ChannelID(), name, file)
+	m2, err := m.client.ses.ChannelFileSend(m.ChannelID(), name, file)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	return NewDiscordMessage(m.s, m2)
+	return NewDiscordMessage(m.client, m2)
 }
 
 func (m *DiscordMessage) ReplyFileWithMessage(msg, name string, file io.Reader) *DiscordMessage {
-	m2, err := m.s.ChannelFileSendWithMessage(m.ChannelID(), msg, name, file)
+	m2, err := m.client.ses.ChannelFileSendWithMessage(m.ChannelID(), msg, name, file)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	return NewDiscordMessage(m.s, m2)
+	return NewDiscordMessage(m.client, m2)
 }
 
 func (m *DiscordMessage) Arg(key string) string {
@@ -126,13 +126,13 @@ func (m *DiscordMessage) Arg(key string) string {
 }
 
 func (m *DiscordMessage) Edit(msg string) {
-	m.s.ChannelMessageEdit(m.ChannelID(), m.ID(), msg)
+	m.client.ses.ChannelMessageEdit(m.ChannelID(), m.ID(), msg)
 }
 
 func (m *DiscordMessage) EditEmbed(embed *discordgo.MessageEmbed) {
 	s := new(string)
 	*s = ""
-	_, err := m.s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+	_, err := m.client.ses.ChannelMessageEditComplex(&discordgo.MessageEdit{
 		Content: s,
 		Embed:   embed,
 		ID:      m.ID(),
@@ -145,11 +145,11 @@ func (m *DiscordMessage) EditEmbed(embed *discordgo.MessageEmbed) {
 }
 
 func (m *DiscordMessage) Delete() {
-	m.s.ChannelMessageDelete(m.ChannelID(), m.ID())
+	m.client.ses.ChannelMessageDelete(m.ChannelID(), m.ID())
 }
 
 func (m *DiscordMessage) DeleteManyIDs(ids ...string) {
-	err := m.s.ChannelMessagesBulkDelete(m.ChannelID(), ids)
+	err := m.client.ses.ChannelMessagesBulkDelete(m.ChannelID(), ids)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -188,14 +188,14 @@ func (m *DiscordMessage) Pairs(keys, vals []string) {
 }
 
 func (m *DiscordMessage) Channel() *DiscordChannel {
-	if c := Cache.GetChannel(m.ChannelID()); c != nil {
+	if c := m.client.Cache.GetChannel(m.ChannelID()); c != nil {
 		return c
 	}
-	c, err := m.Session().Channel(m.ChannelID())
+	c, err := m.client.ses.Channel(m.ChannelID())
 	if err != nil {
 		return nil
 	}
-	return NewDiscordChannel(m.Session(), c)
+	return NewDiscordChannel(m.client, c)
 }
 
 func (m *DiscordMessage) PrintPairs() {
@@ -206,30 +206,30 @@ func (m *DiscordMessage) PrintPairs() {
 
 func (m *DiscordMessage) Guild() *DiscordGuild {
 	if ch := m.Channel(); ch != nil {
-		if gm := Cache.GetGuild(ch.GuildID()); gm != nil {
+		if gm := m.client.Cache.GetGuild(ch.GuildID()); gm != nil {
 			return gm
 		}
-		g, _ := m.s.Guild(ch.GuildID())
-		return NewDiscordGuild(m.Session(), g)
+		g, _ := m.client.ses.Guild(ch.GuildID())
+		return NewDiscordGuild(m.client, g)
 	}
 	return nil
 }
 
 // WaitForMessage intercepts messages until ``timeout`` is reached, or ``cb`` returns ``true``.
 func (m *DiscordMessage) WaitForMessage(timeout int, cb func(*DiscordMessage) bool, onTimeout func()) {
-	Cache.client.waitForMessage(timeout, cb, onTimeout)
+	m.client.waitForMessage(timeout, cb, onTimeout)
 }
 
 func (m *DiscordMessage) WaitForever(cb func(*DiscordMessage)) (done chan bool) {
-	return Cache.client.waitForever(cb)
+	return m.client.waitForever(cb)
 }
 
 func (m *DiscordMessage) React(emoji string) {
-	m.s.MessageReactionAdd(m.ChannelID(), m.ID(), emoji)
+	m.client.ses.MessageReactionAdd(m.ChannelID(), m.ID(), emoji)
 }
 
 func (m *DiscordMessage) RemoveReaction(emoji string) {
-	m.s.MessageReactionRemove(m.ChannelID(), m.ID(), emoji, m.Author.ID())
+	m.client.ses.MessageReactionRemove(m.ChannelID(), m.ID(), emoji, m.Author.ID())
 }
 
 func (m *DiscordMessage) HasMention() bool {
@@ -238,4 +238,8 @@ func (m *DiscordMessage) HasMention() bool {
 
 func (m *DiscordMessage) MentionsEveryone() bool {
 	return m.m.MentionEveryone
+}
+
+func (m *DiscordMessage) Reactions() []*discordgo.MessageReactions {
+	return m.m.Reactions
 }
