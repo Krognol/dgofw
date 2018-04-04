@@ -18,12 +18,17 @@ type (
 		channels map[string]*DiscordChannel
 	}
 
+	Interceptor struct {
+		ID   string
+		Chan chan *DiscordMessage
+	}
+
 	DiscordClient struct {
 		sync.RWMutex
 		Cache            *DiscordCache
 		ses              *discordgo.Session
 		handlers         []*MsgHandler
-		interceptors     []chan *DiscordMessage
+		interceptors     []*Interceptor
 		VoiceConnections []*DiscordVoiceConnection
 	}
 )
@@ -169,8 +174,11 @@ func (c *DiscordClient) initEvents() {
 	c.ses.AddHandler(c.handleGuildD)
 }
 
-func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit func()) (reader chan *DiscordMessage) {
-	reader = make(chan *DiscordMessage)
+func (c *DiscordClient) intercept(timeout int, id string, closer chan struct{}, onLimit func()) (reader *Interceptor) {
+	reader = &Interceptor{
+		ID:   id,
+		Chan: make(chan *DiscordMessage),
+	}
 
 	c.Lock()
 	c.interceptors = append(c.interceptors, reader)
@@ -194,7 +202,7 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 		c.Lock()
 		if len(c.interceptors) > 0 {
 			c.interceptors = append(c.interceptors[:index], c.interceptors[index+1:]...)
-			close(reader)
+			close(reader.Chan)
 		}
 		c.Unlock()
 		close(closer)
@@ -202,58 +210,16 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 	return
 }
 
-func (c *DiscordClient) waitForMessage(timeout int, cb func(*DiscordMessage) bool, onLimit func()) {
+func (c *DiscordClient) waitForMessage(timeout int, channel string, cb func(*DiscordMessage) bool, onLimit func()) {
 	closer := make(chan struct{})
-	reader := c.intercept(timeout, closer, onLimit)
+	reader := c.intercept(timeout, channel, closer, onLimit)
 
-	for msg := range reader {
+	for msg := range reader.Chan {
 		if cb(msg) {
 			closer <- struct{}{}
 			return
 		}
 	}
-}
-
-func (c *DiscordClient) interceptForever(closer chan bool) (reader chan *DiscordMessage) {
-	reader = make(chan *DiscordMessage)
-
-	c.RLock()
-	c.interceptors = append(c.interceptors, reader)
-	c.RUnlock()
-
-	go func() {
-		index := len(c.interceptors) - 1
-		<-closer
-
-		c.Lock()
-		if index > 0 {
-			c.interceptors = append(c.interceptors[:index], c.interceptors[index+1:]...)
-			close(reader)
-		}
-		c.Unlock()
-		close(closer)
-	}()
-	return
-}
-
-func (c *DiscordClient) waitForever(cb func(*DiscordMessage)) chan bool {
-	closer := make(chan bool)
-	reader := c.interceptForever(closer)
-	go func(cb func(*DiscordMessage), closer chan bool) {
-		defer close(closer)
-		defer close(reader)
-		for {
-			select {
-			case msg := <-reader:
-				cb(msg)
-			case t := <-closer:
-				if t {
-					return
-				}
-			}
-		}
-	}(cb, closer)
-	return closer
 }
 
 // NewDiscordClient makes a new DiscordClient
@@ -262,11 +228,15 @@ func (c *DiscordClient) waitForever(cb func(*DiscordMessage)) chan bool {
 func NewDiscordClient(token string) *DiscordClient {
 	var err error
 	result := new(DiscordClient)
-	result.ses, err = discordgo.New("Bot " + token)
+	if token[0:3] != "Bot" {
+		token = "Bot " + token
+	}
+
+	result.ses, err = discordgo.New(token)
 	if err != nil {
 		panic(err)
 	}
-	result.interceptors = make([]chan *DiscordMessage, 0)
+	result.interceptors = make([]*Interceptor, 0)
 	result.initCache()
 	result.initEvents()
 	return result

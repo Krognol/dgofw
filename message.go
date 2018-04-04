@@ -217,11 +217,7 @@ func (m *DiscordMessage) Guild() *DiscordGuild {
 
 // WaitForMessage intercepts messages until ``timeout`` is reached, or ``cb`` returns ``true``.
 func (m *DiscordMessage) WaitForMessage(timeout int, cb func(*DiscordMessage) bool, onTimeout func()) {
-	m.client.waitForMessage(timeout, cb, onTimeout)
-}
-
-func (m *DiscordMessage) WaitForever(cb func(*DiscordMessage)) (done chan bool) {
-	return m.client.waitForever(cb)
+	m.client.waitForMessage(timeout, m.ChannelID(), cb, onTimeout)
 }
 
 func (m *DiscordMessage) React(emoji string) {

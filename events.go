@@ -38,7 +38,9 @@ func (c *DiscordClient) handleMessageC(s *discordgo.Session, m *discordgo.Messag
 	vals := strings.Fields(m.Content)
 	if len(c.interceptors) > 0 {
 		for _, iter := range c.interceptors {
-			iter <- msg
+			if iter.ID == msg.ChannelID() {
+				iter.Chan <- msg
+			}
 		}
 	}
 
