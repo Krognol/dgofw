@@ -24,8 +24,10 @@ func NewDiscordGuild(client *DiscordClient, g *discordgo.Guild) *DiscordGuild {
 	if owner := client.Cache.GetMember(g.ID, g.OwnerID); owner != nil {
 		result.Owner = owner
 	} else {
-		m, _ := client.ses.GuildMember(g.ID, g.OwnerID)
-		result.Owner = NewDiscordMember(client, m)
+		m, err := client.ses.GuildMember(g.ID, g.OwnerID)
+		if err == nil && m != nil {
+			result.Owner = NewDiscordMember(client, m)
+		}
 	}
 	return result
 }

@@ -193,12 +193,10 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 
 		c.Lock()
 		if len(c.interceptors) > 0 {
-			copy(c.interceptors[index:], c.interceptors[index+1:])
-			c.interceptors[len(c.interceptors)-1] = nil
-			c.interceptors = c.interceptors[:len(c.interceptors)-1]
+			c.interceptors = append(c.interceptors[:index], c.interceptors[index+1:]...)
+			close(reader)
 		}
 		c.Unlock()
-
 		close(closer)
 	}(c, timeout, closer, onLimit)
 	return
@@ -207,7 +205,6 @@ func (c *DiscordClient) intercept(timeout int, closer chan struct{}, onLimit fun
 func (c *DiscordClient) waitForMessage(timeout int, cb func(*DiscordMessage) bool, onLimit func()) {
 	closer := make(chan struct{})
 	reader := c.intercept(timeout, closer, onLimit)
-	defer close(reader)
 
 	for msg := range reader {
 		if cb(msg) {
@@ -231,6 +228,7 @@ func (c *DiscordClient) interceptForever(closer chan bool) (reader chan *Discord
 		c.Lock()
 		if index > 0 {
 			c.interceptors = append(c.interceptors[:index], c.interceptors[index+1:]...)
+			close(reader)
 		}
 		c.Unlock()
 		close(closer)
@@ -260,7 +258,7 @@ func (c *DiscordClient) waitForever(cb func(*DiscordMessage)) chan bool {
 
 // NewDiscordClient makes a new DiscordClient
 //
-// Automatically pre-pends 'Bot ' to the token.
+// Automatically prepends 'Bot ' to the token.
 func NewDiscordClient(token string) *DiscordClient {
 	var err error
 	result := new(DiscordClient)
