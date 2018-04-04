@@ -2,12 +2,6 @@
 
 
 [[projects]]
-  branch = "master"
-  name = "github.com/bwmarrin/dgvoice"
-  packages = ["."]
-  revision = "3c939eca8b2f42c3c8cdaf3444ec4c0223d1d1df"
-
-[[projects]]
   name = "github.com/bwmarrin/discordgo"
   packages = ["."]
   revision = "4a33b9bc7c56cfdb9bb244e33e83cb3941fe2bdc"
@@ -22,18 +16,16 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["nacl/secretbox","poly1305","salsa20/salsa"]
+  packages = [
+    "nacl/secretbox",
+    "poly1305",
+    "salsa20/salsa"
+  ]
   revision = "21652f85b0fdddb6c2b6b77a5beca5c5a908174a"
-
-[[projects]]
-  branch = "master"
-  name = "layeh.com/gopus"
-  packages = ["."]
-  revision = "0ebf989153aa016ef5e77141b08c48e48a79312e"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "fb812ea5916ab16f8112a6824883a9b542a6cace3cf360e78bc967109879714e"
+  inputs-digest = "cf20d9712009652acc4f2942c05ef2c99fa297b952be4d1e22fd11a4a12eb581"
   solver-name = "gps-cdcl"
   solver-version = 1
